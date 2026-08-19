@@ -1,0 +1,351 @@
+/* ---------------------------------------------------------------------------
+   MISTAKE brand styling.
+
+   ClashDisplay is not on Google Fonts, so it comes from Fontshare, loaded via
+   a <link> in layout.tsx.
+
+   It is deliberately NOT an @import here: next/font injects Inter's @font-face
+   rules ahead of this file, which pushes any @import past the first rule. CSS
+   requires @import to precede all rules, so the browser discards it silently —
+   no error, no request, headings just quietly fall back to Arial.
+
+   Two things this leaves open before launch:
+     - third-party request, so a Content-Security-Policy needs
+       api.fontshare.com and cdn.fontshare.com in style-src and font-src
+     - self-hosting via next/font/local would remove both the CSP entry and
+       the extra round trip
+
+   Body copy is Inter, self-hosted by next/font — see layout.tsx.
+   --------------------------------------------------------------------------- */
+
+:root {
+  /* Brand ---------------------------------------------------------------- */
+  --orange: #ff5400; /* primary accent, CTAs, emphasised headings */
+  --navy: #113b4e; /* secondary — the dominant text colour */
+  --navy-deep: #001d26; /* dark sections */
+  --cream: #ffe9d6; /* warm background, and text on dark sections */
+  --pink: #ffdede; /* alerts and highlights */
+  --gray: #9c9c9c; /* borders and dividers */
+  --near-black: #222222;
+  --white: #ffffff;
+
+  /* Applied roles -------------------------------------------------------- */
+  --bg: var(--white);
+  --bg-warm: var(--cream);
+  --surface: var(--white);
+  --ink: var(--navy);
+
+  /*
+    Derived from --navy rather than using --gray for secondary text. #9C9C9C
+    on white measures 2.8:1, which fails WCAG AA for body copy — it is kept
+    for borders, where contrast minimums don't apply. This tint reads at
+    6.1:1 and stays on-brand.
+  */
+  --ink-muted: #4a6675;
+
+  --line: #e3e0dc;
+  --line-strong: var(--gray);
+
+  --accent: var(--orange);
+  --accent-ink: var(--white);
+
+  --warning-bg: var(--cream);
+  --warning-line: #e0b184;
+  --warning-ink: #7a3d0c;
+
+  --error-bg: var(--pink);
+  --error-line: #e0a3a3;
+  --error-ink: #8a2f26;
+
+  --font-display: "Clashdisplay Variable", "Clash Display", Arial, sans-serif;
+  --font-text: var(--font-body), Inter, Arial, sans-serif;
+
+  --radius: 10px;
+  --radius-sm: 6px;
+}
+
+/*
+  Dark mode uses the brand's own dark-section pairing — --navy-deep ground
+  with --cream text — rather than inventing a second palette.
+*/
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: var(--navy-deep);
+    --bg-warm: #0a2b38;
+    --surface: #0a2b38;
+    --ink: var(--cream);
+    --ink-muted: #a8b8bf;
+    --line: #1d4557;
+    --line-strong: #2d5a6e;
+
+    --accent: #ff6a24; /* lifted slightly to hold up against the dark ground */
+    --accent-ink: #24170f;
+
+    --warning-bg: #33261a;
+    --warning-line: #7a5a34;
+    --warning-ink: var(--cream);
+
+    --error-bg: #3a2321;
+    --error-line: #7d4a45;
+    --error-ink: #ffd4d0;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-text);
+  font-weight: 400;
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Type -------------------------------------------------------------------- */
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  margin: 0 0 0.5rem;
+}
+
+h1 {
+  font-size: clamp(1.875rem, 1.4rem + 1.6vw, 2.5rem);
+}
+
+h2 {
+  font-size: 1.5rem;
+  color: var(--accent);
+}
+
+h3 {
+  font-size: 1.1875rem;
+  color: var(--accent);
+}
+
+p {
+  margin: 0 0 1rem;
+}
+
+/*
+  The brief flagged #0000EE turning up on <a> tags — that is the browser
+  default showing through unstyled links. Styling them explicitly here so it
+  doesn't reach production.
+*/
+a {
+  color: var(--accent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.15em;
+}
+
+a:hover {
+  color: var(--ink);
+}
+
+/* Layout ------------------------------------------------------------------ */
+
+.shell {
+  max-width: 62rem;
+  margin: 0 auto;
+  padding: 3.5rem 1.5rem 5rem;
+}
+
+.shell--narrow {
+  max-width: 38rem;
+}
+
+.page-head {
+  margin-bottom: 2rem;
+}
+
+.eyebrow {
+  font-family: var(--font-text);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--accent);
+  margin: 0 0 0.625rem;
+}
+
+.lede {
+  color: var(--ink-muted);
+  font-size: 1.0625rem;
+  margin: 0;
+  max-width: 34rem;
+}
+
+.muted {
+  color: var(--ink-muted);
+}
+
+/* Notices ----------------------------------------------------------------- */
+
+.notice {
+  background: var(--bg-warm);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.9375rem 1.125rem;
+  margin: 0 0 1.5rem;
+  font-size: 0.9375rem;
+  color: var(--ink);
+}
+
+.notice--warning {
+  background: var(--warning-bg);
+  border-color: var(--warning-line);
+  color: var(--warning-ink);
+}
+
+.notice--error {
+  background: var(--error-bg);
+  border-color: var(--error-line);
+  color: var(--error-ink);
+}
+
+/* Controls ---------------------------------------------------------------- */
+
+.button {
+  font-family: var(--font-text);
+  font-size: 1rem;
+  font-weight: 500;
+  background: var(--accent);
+  color: var(--accent-ink);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: 0.6875rem 1.375rem;
+  cursor: pointer;
+  transition: filter 0.15s ease;
+}
+
+.button:hover:not(:disabled) {
+  filter: brightness(0.92);
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.button--quiet {
+  background: transparent;
+  color: var(--ink);
+  border-color: var(--line-strong);
+}
+
+.button--quiet:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+  filter: none;
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 1.75rem;
+}
+
+.tab {
+  font-family: var(--font-text);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--ink-muted);
+  padding: 0.6875rem 0.9375rem;
+  cursor: pointer;
+  margin-bottom: -1px;
+}
+
+.tab:hover {
+  color: var(--ink);
+}
+
+.tab[aria-current="page"] {
+  color: var(--ink);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+.tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+
+/* Forms ------------------------------------------------------------------- */
+
+.field {
+  display: block;
+  margin-bottom: 1.125rem;
+}
+
+.field span {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--ink);
+  margin-bottom: 0.4375rem;
+}
+
+.field input {
+  font-family: var(--font-text);
+  font-size: 1rem;
+  width: 100%;
+  padding: 0.6875rem 0.8125rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.field input::placeholder {
+  color: var(--ink-muted);
+}
+
+.field input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: transparent;
+}
+
+/* Array component host ---------------------------------------------------- */
+
+/*
+  Array's components render in the light DOM and bring their own styling.
+  This deliberately does not reach into them — it only reserves space, so a
+  brand upgrade here never becomes a fight with their stylesheet.
+*/
+.array-host {
+  margin-top: 1.75rem;
+  min-height: 12rem;
+}
+
+.prose p {
+  max-width: 34rem;
+  color: var(--ink-muted);
+}
