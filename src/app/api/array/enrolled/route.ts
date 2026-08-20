@@ -57,7 +57,12 @@ export async function POST(request: Request) {
       consumerId,
       theirs: body.userId,
     });
-    return NextResponse.json({ error: "Identity mismatch." }, { status: 409 });
+    return NextResponse.json(
+      {
+        error: `Array returned userId ${body.userId}, expected ${consumerId}.`,
+      },
+      { status: 409 }
+    );
   }
 
   const { error } = await supabase.rpc("record_consumer_enrolment", {

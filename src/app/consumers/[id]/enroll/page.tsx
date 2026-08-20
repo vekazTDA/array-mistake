@@ -22,6 +22,7 @@ export default function EnrollPage() {
   const [consumer, setConsumer] = useState<Consumer | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [failures, setFailures] = useState(0);
+  const [recordError, setRecordError] = useState<string | null>(null);
 
   useEffect(() => {
     const supabase = createClient();
@@ -71,11 +72,37 @@ export default function EnrollPage() {
       // sent to our backend — we mint our own server-side.
       const enrolledId = detail.metadata?.userId as string | undefined;
 
-      await fetch("/api/array/enrolled", {
+      const res = await fetch("/api/array/enrolled", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ consumerId, userId: enrolledId }),
       });
+
+      /**
+       * Do not navigate on failure.
+       *
+       * An earlier version ignored this response and pushed to the dashboard
+       * regardless. When recording failed, the dashboard asked for a token,
+       * got 409 "not enrolled", and bounced straight back here — so a
+       * successful bureau verification looked like the form silently
+       * restarting, with the real error never shown anywhere.
+       */
+      if (!res.ok) {
+        const payload = await res.json().catch(() => null);
+        console.error("Array verification succeeded but enrolment was not recorded", {
+          status: res.status,
+          error: payload?.error,
+          consumerId,
+          arrayUserId: enrolledId,
+          metadata: detail.metadata,
+        });
+        setRecordError(
+          payload?.error
+            ? `${payload.error} (${res.status})`
+            : `Couldn't save the result (${res.status}).`
+        );
+        return;
+      }
 
       router.push(`/consumers/${consumerId}/dashboard`);
     }
@@ -129,6 +156,18 @@ export default function EnrollPage() {
         TransUnion sends a one-time passcode to <strong>{consumer.display_name}&rsquo;s</strong>{" "}
         phone. Make sure they&rsquo;re on the call before you start.
       </p>
+
+      {/*
+        Verification passed at the bureau but we failed to write it down. The
+        consumer has spent a real attempt, so say so plainly rather than
+        letting them run the form again.
+      */}
+      {recordError && (
+        <p className="notice notice--error" role="alert">
+          Identity was verified, but the result couldn&rsquo;t be saved: {recordError} Don&rsquo;t
+          re-run the form — the verification already counted. Check the server logs.
+        </p>
+      )}
 
       {failures >= 2 && (
         <p className="notice notice--warning" role="alert">
