@@ -349,3 +349,65 @@ a:hover {
   max-width: 34rem;
   color: var(--ink-muted);
 }
+
+/* Client list ------------------------------------------------------------- */
+
+.add-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+  padding: 1.125rem;
+  background: var(--bg-warm);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  margin-bottom: 2rem;
+}
+
+.add-row .field {
+  flex: 1 1 14rem;
+  margin-bottom: 0;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+}
+
+.table th {
+  text-align: left;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-muted);
+  padding: 0 0.75rem 0.5rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.table td {
+  padding: 0.875rem 0.75rem;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+
+.table td.right {
+  text-align: right;
+}
+
+.pill {
+  display: inline-block;
+  font-size: 0.8125rem;
+  padding: 0.1875rem 0.625rem;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  color: var(--ink-muted);
+}
+
+/* Verified is the state that matters — a pull is possible from here. */
+.pill--ok {
+  border-color: transparent;
+  background: var(--accent);
+  color: var(--accent-ink);
+}

@@ -23,6 +23,9 @@ const MAX_FIELD_LENGTH = 64;
  * takes user_id from auth.uid(). Direct inserts into array_events are no
  * longer granted to anyone — the browser previously could, which made the
  * redaction here bypassable.
+ *
+ * Rows carry the consumer, because billing is per pull and a pull is per
+ * consumer rather than per login.
  */
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -40,7 +43,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Body too large." }, { status: 413 });
   }
 
-  let body: { tagName?: unknown; event?: unknown; metadata?: unknown };
+  let body: { consumerId?: unknown; tagName?: unknown; event?: unknown; metadata?: unknown };
   try {
     body = JSON.parse(raw);
   } catch {
@@ -56,6 +59,9 @@ export async function POST(request: Request) {
       : {};
 
   const { error } = await supabase.rpc("record_array_event", {
+    // Ownership of the consumer is verified inside the function, so a forged
+    // id here writes nothing rather than mislabelling somebody else's pull.
+    p_consumer_id: typeof body.consumerId === "string" ? body.consumerId : null,
     p_tag_name: typeof body.tagName === "string" ? body.tagName.slice(0, MAX_FIELD_LENGTH) : null,
     p_event: typeof body.event === "string" ? body.event.slice(0, MAX_FIELD_LENGTH) : null,
     p_metadata: metadata,
@@ -65,7 +71,11 @@ export async function POST(request: Request) {
     // Auditing must never break the customer's session, so this stays quiet to
     // the caller. It does need to be alertable: a silent gap in the audit trail
     // is a billing reconciliation problem nobody notices for a month.
-    console.error("Failed to write audit row", { userId: user.id, error: error.message });
+    console.error("Failed to write audit row", {
+      userId: user.id,
+      consumerId: body.consumerId,
+      error: error.message,
+    });
     return NextResponse.json({ ok: false }, { status: 500 });
   }
 

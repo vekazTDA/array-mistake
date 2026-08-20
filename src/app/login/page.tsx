@@ -9,8 +9,8 @@ type Mode = "signin" | "signup";
 /**
  * Our own accounts, not array-account-login.
  *
- * Using Array's login component would give customers two separate logins for
- * what they experience as one product. This is the only credential they have.
+ * Using Array's login component would mean a second, separate login. Staff
+ * sign in here once and work through their client list.
  */
 export default function LoginPage() {
   const router = useRouter();
@@ -45,9 +45,9 @@ export default function LoginPage() {
 
       /**
        * With "Confirm email" enabled, signUp returns a user but no session —
-       * nothing is signed in until the customer clicks the emailed link. Say
-       * so, rather than pushing them to /enroll where they'd be bounced
-       * straight back here with no explanation.
+       * nothing is signed in until the link is clicked. Say so, rather than
+       * pushing on to /consumers where they'd be bounced straight back here
+       * with no explanation.
        */
       if (!data.session) {
         setNotice("Check your email for a confirmation link, then sign in.");
@@ -56,7 +56,7 @@ export default function LoginPage() {
         return;
       }
 
-      router.push("/enroll");
+      router.push("/consumers");
       return;
     }
 
@@ -68,18 +68,17 @@ export default function LoginPage() {
       return;
     }
 
-    router.push("/enroll");
+    router.push("/consumers");
   }
 
   return (
     <main className="shell shell--narrow">
       <header className="page-head">
-        <p className="eyebrow">Step 1 of 2</p>
         <h1>{mode === "signin" ? "Sign in" : "Create your account"}</h1>
         <p className="lede">
           {mode === "signin"
-            ? "Your credit report is behind this login."
-            : "You'll verify your identity with the credit bureau in the next step."}
+            ? "Client credit reports are behind this login."
+            : "You'll add the clients whose credit you check in the next step."}
         </p>
       </header>
 

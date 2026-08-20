@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 
 /**
  * There is no marketing page here — mistake.com stays on Webflow and links to
- * this subdomain. Land people wherever they actually are in the flow.
+ * this subdomain. Land staff on their client list.
  */
 export default async function Home() {
   const supabase = await createClient();
@@ -12,13 +12,5 @@ export default async function Home() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) redirect("/login");
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("array_user_id")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  redirect(profile?.array_user_id ? "/dashboard" : "/enroll");
+  redirect(user ? "/consumers" : "/login");
 }

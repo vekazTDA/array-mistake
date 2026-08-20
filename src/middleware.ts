@@ -69,7 +69,7 @@ export async function middleware(request: NextRequest) {
   return response;
 }
 
-const PROTECTED_PREFIXES = ["/enroll", "/dashboard"];
+const PROTECTED_PREFIXES = ["/consumers"];
 
 export const config = {
   matcher: [
