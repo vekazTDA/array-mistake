@@ -64,8 +64,9 @@ create trigger on_auth_user_created
 -- ---------------------------------------------------------------------------
 -- Consumers
 --
--- One row per person whose credit is checked. The row's id is that person's
--- Array userId — a UUID fits Array's 36-character limit exactly.
+-- One row per person whose credit is checked. The row's id is passed to Array
+-- as an external reference (it must be unique); Array's own userId comes back
+-- in the signup event and is stored in array_user_id.
 --
 -- display_name is a label so staff can tell one consumer from another. The
 -- identity data itself (SSN, date of birth) goes from the browser to Array and
@@ -77,7 +78,9 @@ create table public.consumers (
   owner_id      uuid not null references auth.users (id) on delete cascade,
   display_name  text not null,
   reference     text,
-  -- Set to id::text by record_consumer_enrolment(). Never supplied by a caller.
+  -- Array's own userId, captured from the signup event. NOT this row's id —
+  -- Array does not adopt the id we supply. Unique, so one Array user can never
+  -- be claimed by two consumers.
   array_user_id text unique,
   enrolled_at   timestamptz,
   created_at    timestamptz not null default now()
@@ -110,38 +113,72 @@ grant update (display_name, reference) on public.consumers to authenticated;
 -- ---------------------------------------------------------------------------
 -- Enrolment
 --
--- Takes a consumer id, but array_user_id is derived from the row rather than
--- from an argument, and ownership is enforced here. There is no value a caller
--- can pass that maps a consumer to somebody else's Array account.
+-- array_user_id holds the userId ARRAY returns, not the one we supply. Array
+-- does not adopt a caller-supplied id: the value passed to
+-- array-account-enroll behaves as an external reference it requires to be
+-- unique, and the id it hands back in the signup event is the one its token
+-- endpoint expects.
+--
+-- Because that id is external, a wrong mapping cannot be ruled out by
+-- construction the way it once was. Ownership, write-once and the unique index
+-- carry the weight instead. See 004_array_user_id.sql for the full reasoning.
 -- ---------------------------------------------------------------------------
 
-create function public.record_consumer_enrolment(p_consumer_id uuid)
+create function public.record_consumer_enrolment(
+  p_consumer_id   uuid,
+  p_array_user_id text
+)
 returns void
 language plpgsql
 security definer
 set search_path = ''
 as $$
+declare
+  v_existing text;
 begin
   if auth.uid() is null then
     raise exception 'not authenticated' using errcode = '28000';
   end if;
 
-  update public.consumers
-     set array_user_id = id::text,
-         enrolled_at   = coalesce(enrolled_at, now())
+  if p_array_user_id is null
+     or length(btrim(p_array_user_id)) = 0
+     or length(p_array_user_id) > 36
+  then
+    raise exception 'invalid array user id' using errcode = '22023';
+  end if;
+
+  -- RLS does not apply inside a SECURITY DEFINER function, so ownership is
+  -- checked explicitly here.
+  select array_user_id
+    into v_existing
+    from public.consumers
    where id = p_consumer_id
      and owner_id = auth.uid();
 
   if not found then
-    -- Covers both "no such consumer" and "not yours" on purpose: the caller
-    -- learns nothing about ids they don't own.
     raise exception 'consumer not found' using errcode = 'P0002';
   end if;
+
+  -- Write once: a retry with the same id is a no-op, a different id is
+  -- refused, so an existing mapping can never be re-pointed.
+  if v_existing is not null then
+    if v_existing = btrim(p_array_user_id) then
+      return;
+    end if;
+    raise exception 'consumer already mapped to a different Array user'
+      using errcode = '23505';
+  end if;
+
+  update public.consumers
+     set array_user_id = btrim(p_array_user_id),
+         enrolled_at   = coalesce(enrolled_at, now())
+   where id = p_consumer_id
+     and owner_id = auth.uid();
 end;
 $$;
 
-revoke all on function public.record_consumer_enrolment(uuid) from public, anon;
-grant execute on function public.record_consumer_enrolment(uuid) to authenticated;
+revoke all on function public.record_consumer_enrolment(uuid, text) from public, anon;
+grant execute on function public.record_consumer_enrolment(uuid, text) to authenticated;
 
 
 -- ---------------------------------------------------------------------------

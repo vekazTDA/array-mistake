@@ -11,9 +11,13 @@ const MAX_BODY_BYTES = 2048;
  * Tokens are minted server-side by /api/array/token; a token that arrived from
  * the browser is not something this app should trust or store.
  *
- * The write goes through record_consumer_enrolment(), which sets
- * array_user_id from the consumer's own row and enforces ownership. This route
- * cannot map a consumer to the wrong Array account even if it wanted to.
+ * The userId in that metadata IS the value we store. Array does not adopt the
+ * id we supply to array-account-enroll — that one behaves as an external
+ * reference Array requires to be unique. The id it returns is Array's own, and
+ * it is what the token endpoint expects.
+ *
+ * record_consumer_enrolment() enforces ownership, writes once, and relies on a
+ * unique index so one Array user cannot be claimed by two consumers.
  */
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -44,37 +48,42 @@ export async function POST(request: Request) {
   const consumerId = body.consumerId;
 
   /**
-   * The enrol page passes the consumer's own row id to Array, so what comes
-   * back should be identical. This no longer guards anything — the database
-   * derives the mapping itself — but a mismatch means Array and this app
-   * disagree about who someone is, which is worth knowing about early.
-   *
-   * Skipped when the caller sends no userId: it is a consistency check on
-   * Array's response, not an authorisation check on the caller.
+   * Array's own userId, from the signup event. Without it there is nothing to
+   * mint a token against later, so this is required rather than advisory —
+   * an earlier version treated a difference from our consumer id as an error,
+   * which rejected every real enrolment.
    */
-  if (typeof body.userId === "string" && body.userId !== consumerId) {
-    console.error("Array returned a userId that isn't the consumer's", {
-      consumerId,
-      theirs: body.userId,
-    });
+  if (typeof body.userId !== "string" || !body.userId.trim()) {
+    console.error("Signup event carried no Array userId", { consumerId });
     return NextResponse.json(
-      {
-        error: `Array returned userId ${body.userId}, expected ${consumerId}.`,
-      },
-      { status: 409 }
+      { error: "Array did not return a userId." },
+      { status: 422 }
     );
   }
+  const arrayUserId = body.userId.trim();
 
   const { error } = await supabase.rpc("record_consumer_enrolment", {
     p_consumer_id: consumerId,
+    p_array_user_id: arrayUserId,
   });
 
   if (error) {
-    console.error("Failed to record enrolment", { consumerId, error: error.message });
-    // P0002 is the function's "consumer not found", which also covers
-    // "not yours".
-    const status = error.code === "P0002" ? 404 : 500;
-    return NextResponse.json({ error: "Could not record enrolment." }, { status });
+    console.error("Failed to record enrolment", {
+      consumerId,
+      arrayUserId,
+      code: error.code,
+      error: error.message,
+    });
+
+    // P0002 = consumer not found, which also covers "not yours".
+    // 23505 = already mapped to a different Array user, or that Array user is
+    //         already claimed by another consumer.
+    const status = error.code === "P0002" ? 404 : error.code === "23505" ? 409 : 500;
+    const message =
+      error.code === "23505"
+        ? "This person is already linked to a different Array record."
+        : "Could not record enrolment.";
+    return NextResponse.json({ error: message }, { status });
   }
 
   return NextResponse.json({ ok: true });
