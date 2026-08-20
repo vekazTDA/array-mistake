@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createHash } from "crypto";
 import { rateLimit } from "@/lib/rateLimit";
 
 const MAX_BODY_BYTES = 2048;
@@ -124,15 +125,31 @@ export async function POST(request: Request) {
      */
     const detail = await res.text().catch(() => "<unreadable>");
 
+    /**
+     * A 403 has two very different causes and they need separating: the wrong
+     * server token deployed to this environment, or a credential that is fine
+     * but coming from an IP Array does not allow.
+     *
+     * This logs a one-way fingerprint of the token, never the token. Compare
+     * the length and hash against the local value to tell whether the two
+     * environments hold the same secret. If they match, the credential is not
+     * the problem and the rejection is about where the request came from.
+     */
+    const token = process.env.ARRAY_SERVER_TOKEN ?? "";
+    const fingerprint = token
+      ? `len=${token.length} sha256=${createHash("sha256").update(token).digest("hex").slice(0, 12)}`
+      : "MISSING — ARRAY_SERVER_TOKEN is not set in this environment";
+
     console.error("Array token regeneration failed", {
       status: res.status,
       statusText: res.statusText,
       arrayUserId: consumer.array_user_id,
       arrayResponse: detail.slice(0, 500),
+      serverTokenFingerprint: fingerprint,
       // Which of the three open questions this points at.
       likelyCause:
         res.status === 401 || res.status === 403
-          ? "ARRAY_SERVER_TOKEN rejected — the Client Token may not be the server token"
+          ? "credential or source IP refused — compare serverTokenFingerprint with the local value to tell which"
           : res.status === 404
             ? "Array does not recognise this userId"
             : res.status === 400
