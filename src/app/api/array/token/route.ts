@@ -85,7 +85,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Not enrolled." }, { status: 409 });
   }
 
-  const ttlInMinutes = process.env.ARRAY_TOKEN_TTL_MINUTES ?? "60";
+  /**
+   * Sent as a number. It was previously forwarded straight from the
+   * environment as a string, which is a plausible cause of a 400 from Array
+   * and costs nothing to rule out.
+   */
+  const ttlInMinutes = Number(process.env.ARRAY_TOKEN_TTL_MINUTES ?? 60);
 
   let res: Response;
   try {
@@ -107,12 +112,34 @@ export async function POST(request: Request) {
   }
 
   if (!res.ok) {
-    // 401/403 here means our own credentials are wrong, not the consumer's.
-    // Worth alerting on rather than surfacing as a user-facing error.
+    /**
+     * A rejection here is ours, not the consumer's — wrong credentials, an
+     * unknown userId, or a malformed body. Array's own response body says
+     * which, so log it: a bare status code turns every failure into a
+     * guessing exercise.
+     *
+     * Truncated, and server-side only. Nothing we send Array is echoed back
+     * in an error body, but the cap means a surprise can't dump anything
+     * large into the log either.
+     */
+    const detail = await res.text().catch(() => "<unreadable>");
+
     console.error("Array token regeneration failed", {
       status: res.status,
+      statusText: res.statusText,
       arrayUserId: consumer.array_user_id,
+      arrayResponse: detail.slice(0, 500),
+      // Which of the three open questions this points at.
+      likelyCause:
+        res.status === 401 || res.status === 403
+          ? "ARRAY_SERVER_TOKEN rejected — the Client Token may not be the server token"
+          : res.status === 404
+            ? "Array does not recognise this userId"
+            : res.status === 400
+              ? "Array rejected the request body"
+              : "unexpected",
     });
+
     return NextResponse.json({ error: "Could not refresh access." }, { status: 502 });
   }
 
