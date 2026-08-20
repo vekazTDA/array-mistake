@@ -93,22 +93,42 @@ export async function POST(request: Request) {
    */
   const ttlInMinutes = Number(process.env.ARRAY_TOKEN_TTL_MINUTES ?? 60);
 
+  /**
+   * Array allowlists source IPs, and Vercel serverless has no static outbound
+   * address — the same credential returns 200 from the office and 403 from a
+   * deployment. When ARRAY_RELAY_URL is set, this call goes through a relay
+   * running at the allowlisted location instead of straight to Array.
+   *
+   * Opt-in by environment so nothing has to change here the day Array
+   * allowlists a permanent egress address: clear the variable and the request
+   * goes direct again. See relay/server.mjs.
+   */
+  const relayUrl = process.env.ARRAY_RELAY_URL;
+  const target = relayUrl || `${process.env.ARRAY_API_BASE}/api/authenticate/v2/usertoken`;
+
   let res: Response;
   try {
-    res = await fetch(`${process.env.ARRAY_API_BASE}/api/authenticate/v2/usertoken`, {
+    res = await fetch(target, {
       method: "POST",
       headers: {
         "content-type": "application/json",
         accept: "application/json",
+        // The relay passes this through rather than holding it, so the
+        // credential never rests on the relay machine.
         "x-array-server-token": process.env.ARRAY_SERVER_TOKEN!,
+        ...(relayUrl ? { "x-relay-secret": process.env.ARRAY_RELAY_SECRET ?? "" } : {}),
       },
       body: JSON.stringify({
         appKey: process.env.NEXT_PUBLIC_ARRAY_APP_KEY,
         userId: consumer.array_user_id,
         ttlInMinutes,
       }),
+      signal: AbortSignal.timeout(20_000),
     });
   } catch {
+    // Covers the relay being offline, which is the failure mode this setup
+    // adds: the office machine going down takes the dashboard with it.
+    console.error("Could not reach Array", { viaRelay: Boolean(relayUrl) });
     return NextResponse.json({ error: "Could not reach Array." }, { status: 502 });
   }
 
@@ -149,6 +169,7 @@ export async function POST(request: Request) {
        * main, and the two are easy to confuse in the dashboard.
        */
       build: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? "local",
+      viaRelay: Boolean(relayUrl),
       status: res.status,
       statusText: res.statusText,
       arrayUserId: consumer.array_user_id,
