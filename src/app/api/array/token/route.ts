@@ -141,6 +141,14 @@ export async function POST(request: Request) {
       : "MISSING — ARRAY_SERVER_TOKEN is not set in this environment";
 
     console.error("Array token regeneration failed", {
+      /**
+       * Which build produced this line. Vercel sets VERCEL_GIT_COMMIT_SHA
+       * automatically. Without it there is no way to tell from a log whether
+       * you are reading current code or an older deployment that was
+       * redeployed on top of it — a redeploy rebuilds that commit, not latest
+       * main, and the two are easy to confuse in the dashboard.
+       */
+      build: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? "local",
       status: res.status,
       statusText: res.statusText,
       arrayUserId: consumer.array_user_id,
