@@ -129,7 +129,7 @@ export default function DashboardPage() {
         attributes={{
           userToken,
           ...(active.id === "overview" ? { bureau: "tui" } : {}),
-          ...(active.id === "report" ? { defaultBureau: "tui" } : {}),
+          ...(active.id === "report" ? { defaultBureau: "all" } : {}),
         }}
       />
     </main>

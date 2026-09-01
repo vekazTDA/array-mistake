@@ -17,6 +17,17 @@ export const ARRAY_EMBED_BASE = ARRAY_SANDBOX
   : "https://embed.array.io";
 
 /**
+ * REST host the widgets call. Distinct from the embed script host.
+ * Array's own snippet sets this as apiUrl on the custom element.
+ * Derived from NEXT_PUBLIC_ARRAY_SANDBOX so it stays off the server-only
+ * ARRAY_API_BASE variable. Override with NEXT_PUBLIC_ARRAY_API_BASE if the
+ * two ever need to differ.
+ */
+export const ARRAY_API_URL =
+  process.env.NEXT_PUBLIC_ARRAY_API_BASE ||
+  (ARRAY_SANDBOX ? "https://sandbox.array.io" : "https://array.io");
+
+/**
  * Array component tag names.
  *
  * Only the ones in scope for this build. The full list is much longer —

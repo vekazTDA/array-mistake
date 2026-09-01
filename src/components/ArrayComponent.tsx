@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ARRAY_APP_KEY, ARRAY_EMBED_BASE, ARRAY_SANDBOX, type ArrayTagName } from "@/lib/array";
+import {
+  ARRAY_API_URL,
+  ARRAY_APP_KEY,
+  ARRAY_EMBED_BASE,
+  ARRAY_SANDBOX,
+  type ArrayTagName,
+} from "@/lib/array";
 
 /**
  * Array ships one script per component, each loaded with the appKey as a
@@ -14,7 +20,11 @@ function loadComponentScript(tag: string): Promise<void> {
   const cached = scriptCache.get(tag);
   if (cached) return cached;
 
-  const src = `${ARRAY_EMBED_BASE}/cms/${tag}.js?appKey=${encodeURIComponent(ARRAY_APP_KEY)}`;
+  // Array's published credit-report snippet loads from embed.array.io even
+  // when sandbox="true" and apiUrl is sandbox.array.io. Other widgets keep
+  // the sandbox embed host when NEXT_PUBLIC_ARRAY_SANDBOX is on.
+  const embedBase = tag === "array-credit-report" ? "https://embed.array.io" : ARRAY_EMBED_BASE;
+  const src = `${embedBase}/cms/${tag}.js?appKey=${encodeURIComponent(ARRAY_APP_KEY)}`;
 
   const pending = new Promise<void>((resolve, reject) => {
     if (document.querySelector(`script[data-array-tag="${tag}"]`)) {
@@ -37,7 +47,7 @@ function loadComponentScript(tag: string): Promise<void> {
 type Props = {
   tag: ArrayTagName;
   /**
-   * Component-specific attributes. appKey and sandbox are applied
+   * Component-specific attributes. appKey, apiUrl, and sandbox are applied
    * automatically — don't pass them.
    *
    * Array treats boolean attributes as strings: the value must literally be
@@ -77,7 +87,9 @@ export default function ArrayComponent({ tag, attributes = {}, className }: Prop
 
         const el = element.current;
         el.setAttribute("appKey", ARRAY_APP_KEY);
+        el.setAttribute("apiUrl", ARRAY_API_URL);
         if (ARRAY_SANDBOX) el.setAttribute("sandbox", "true");
+        else el.removeAttribute("sandbox");
 
         for (const [name, value] of Object.entries(attributes)) {
           if (value === undefined || value === "") {
