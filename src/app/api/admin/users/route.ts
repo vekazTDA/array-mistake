@@ -18,7 +18,24 @@ export async function GET() {
     return NextResponse.json({ error: "Forbidden." }, { status: authz.status });
   }
 
-  const admin = createAdminClient();
+  /**
+   * createAdminClient() throws synchronously if SUPABASE_SERVICE_ROLE_KEY is
+   * missing from this environment. Uncaught, that crashes the whole function
+   * with a blank 500 and no body — exactly what happened here once, when the
+   * key existed in .env.local but wasn't actually present on Vercel. Caught
+   * here so a misconfigured environment fails with a message that says what
+   * to check, not a silent crash.
+   */
+  let admin: ReturnType<typeof createAdminClient>;
+  try {
+    admin = createAdminClient();
+  } catch (err) {
+    console.error("Admin client unavailable", { error: err instanceof Error ? err.message : err });
+    return NextResponse.json(
+      { error: "Admin access is misconfigured. Check SUPABASE_SERVICE_ROLE_KEY." },
+      { status: 500 }
+    );
+  }
 
   const { data, error } = await admin
     .from("profiles")
@@ -54,6 +71,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Forbidden." }, { status: authz.status });
   }
 
+  let admin: ReturnType<typeof createAdminClient>;
+  try {
+    admin = createAdminClient();
+  } catch (err) {
+    console.error("Admin client unavailable", { error: err instanceof Error ? err.message : err });
+    return NextResponse.json(
+      { error: "Admin access is misconfigured. Check SUPABASE_SERVICE_ROLE_KEY." },
+      { status: 500 }
+    );
+  }
+
   const raw = await request.text();
   if (raw.length > MAX_BODY_BYTES) {
     return NextResponse.json({ error: "Body too large." }, { status: 413 });
@@ -80,8 +108,6 @@ export async function POST(request: Request) {
       { status: 400 }
     );
   }
-
-  const admin = createAdminClient();
 
   const { data: created, error: createError } = await admin.auth.admin.createUser({
     email,

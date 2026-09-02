@@ -10,6 +10,17 @@ type StaffUser = {
   created_at: string;
 };
 
+/**
+ * Fixed locale and timezone so the server-rendered string and the browser's
+ * hydration pass always agree. toLocaleDateString() with no arguments uses
+ * the runtime's own locale/timezone on each side — different on a Vercel
+ * function than in the browser — which is what threw React error #418
+ * (hydration mismatch) here.
+ */
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString("en-US", { timeZone: "UTC" });
+}
+
 export default function NewStaffForm({ initialUsers }: { initialUsers: StaffUser[] }) {
   const router = useRouter();
   const [users, setUsers] = useState(initialUsers);
@@ -139,7 +150,7 @@ export default function NewStaffForm({ initialUsers }: { initialUsers: StaffUser
                   <span className="pill">Staff</span>
                 )}
               </td>
-              <td className="muted">{new Date(u.created_at).toLocaleDateString()}</td>
+              <td className="muted">{formatDate(u.created_at)}</td>
             </tr>
           ))}
         </tbody>

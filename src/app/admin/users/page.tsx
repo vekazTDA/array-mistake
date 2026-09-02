@@ -16,11 +16,29 @@ export default async function AdminUsersPage() {
     redirect(authz.status === 401 ? "/login" : "/consumers");
   }
 
-  const admin = createAdminClient();
-  const { data: users } = await admin
-    .from("profiles")
-    .select("id, full_name, role, created_at")
-    .order("created_at", { ascending: false });
+  /**
+   * createAdminClient() throws synchronously if SUPABASE_SERVICE_ROLE_KEY is
+   * missing from this environment. Uncaught in a Server Component, that
+   * produces the generic "Application error: a server-side exception has
+   * occurred" screen with only a digest — exactly what happened here once,
+   * when the key existed in .env.local but wasn't actually present on Vercel.
+   * Rendering a real message instead means the failure is diagnosable from
+   * the screen itself, not just from server logs nobody's looking at yet.
+   */
+  let configError = false;
+  let users: { id: string; full_name: string | null; role: string; created_at: string }[] = [];
+
+  try {
+    const admin = createAdminClient();
+    const { data } = await admin
+      .from("profiles")
+      .select("id, full_name, role, created_at")
+      .order("created_at", { ascending: false });
+    users = data ?? [];
+  } catch (err) {
+    console.error("Admin client unavailable", { error: err instanceof Error ? err.message : err });
+    configError = true;
+  }
 
   return (
     <main className="shell">
@@ -29,7 +47,14 @@ export default async function AdminUsersPage() {
         <p className="lede">Accounts that can sign in and check client credit.</p>
       </header>
 
-      <NewStaffForm initialUsers={users ?? []} />
+      {configError ? (
+        <p className="notice notice--error" role="alert">
+          Admin access is misconfigured — SUPABASE_SERVICE_ROLE_KEY is missing from this
+          environment. Check the deployment&rsquo;s environment variables.
+        </p>
+      ) : (
+        <NewStaffForm initialUsers={users} />
+      )}
     </main>
   );
 }
