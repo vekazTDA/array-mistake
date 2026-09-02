@@ -104,10 +104,12 @@ begin
   );
 
   -- schema.sql's on_auth_user_created trigger normally does this. Repeated
-  -- here so the seed still works if that trigger is missing.
-  insert into public.profiles (id, full_name)
-  values (v_user_id, v_name)
-  on conflict (id) do nothing;
+  -- here so the seed still works if that trigger is missing, and set as
+  -- super_admin so local dev always has one admin login able to reach
+  -- /admin/users without a manual promotion step.
+  insert into public.profiles (id, full_name, role)
+  values (v_user_id, v_name, 'super_admin')
+  on conflict (id) do update set role = 'super_admin';
 
   raise notice 'Seeded % / % (id %)', v_email, v_password, v_user_id;
 end

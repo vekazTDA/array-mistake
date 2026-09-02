@@ -69,7 +69,11 @@ export async function middleware(request: NextRequest) {
   return response;
 }
 
-const PROTECTED_PREFIXES = ["/consumers"];
+// /admin/* still needs its own super_admin check inside the page/route — the
+// role lives in profiles, and middleware deliberately does not add a database
+// read here. This only stops an unauthenticated visitor from reaching the
+// page shell.
+const PROTECTED_PREFIXES = ["/consumers", "/admin"];
 
 export const config = {
   matcher: [

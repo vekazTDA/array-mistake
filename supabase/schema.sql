@@ -24,6 +24,9 @@
 create table public.profiles (
   id         uuid primary key references auth.users (id) on delete cascade,
   full_name  text,
+  -- 'staff' by default. Only /admin/users, running with the service role
+  -- after a super_admin check, may promote someone. See the grant note below.
+  role       text not null default 'staff' check (role in ('staff', 'super_admin')),
   created_at timestamptz not null default now()
 );
 
@@ -39,6 +42,9 @@ create policy "profiles: update own"
   with check (auth.uid() = id);
 
 -- RLS policies cannot restrict individual columns, so column grants do.
+-- role is deliberately NOT granted: "update own" would otherwise let any
+-- signed-in staff member self-promote to super_admin with one client-side
+-- update. Only server code running with the service role may change it.
 revoke update on public.profiles from authenticated, anon;
 grant update (full_name) on public.profiles to authenticated;
 
