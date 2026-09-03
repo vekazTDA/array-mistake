@@ -88,8 +88,14 @@ export default function ArrayComponent({ tag, attributes = {}, className }: Prop
         const el = element.current;
         el.setAttribute("appKey", ARRAY_APP_KEY);
         el.setAttribute("apiUrl", ARRAY_API_URL);
-        if (ARRAY_SANDBOX) el.setAttribute("sandbox", "true");
-        else el.removeAttribute("sandbox");
+        /**
+         * Set explicitly either way. Array's cutover instruction is to change
+         * this value from "true" to "false", not to drop the attribute —
+         * and while an absent boolean attribute should read as false here,
+         * "should" is the wrong standard for the flag that decides whether a
+         * pull hits real bureau data and real billing.
+         */
+        el.setAttribute("sandbox", ARRAY_SANDBOX ? "true" : "false");
 
         for (const [name, value] of Object.entries(attributes)) {
           if (value === undefined || value === "") {
