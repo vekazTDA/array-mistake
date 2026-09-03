@@ -46,6 +46,31 @@ export default function ConsumersPage() {
     void load();
   }, [load]);
 
+  async function onDelete(c: Consumer) {
+    /**
+     * Permanent — see supabase/006_consumer_delete.sql. Two messages: an
+     * already-enrolled client has real identity data on file at Array, and
+     * deleting this row does not touch that or reset a bureau-side lock.
+     * Worth saying before the click is irreversible, not after.
+     */
+    const message = c.enrolled_at
+      ? `Remove ${c.display_name}? This can't be undone. Their identity was already verified with the bureau — deleting them here does not affect that record at Array, and does not reset a lock if their report is currently locked.`
+      : `Remove ${c.display_name}? This can't be undone.`;
+
+    if (!window.confirm(message)) return;
+
+    const res = await fetch(`/api/consumers/${c.id}`, { method: "DELETE" });
+
+    if (!res.ok) {
+      const { error } = await res.json().catch(() => ({ error: null }));
+      setError(error ?? "Couldn't remove that client.");
+      return;
+    }
+
+    setError(null);
+    setConsumers((prev) => (prev ? prev.filter((row) => row.id !== c.id) : prev));
+  }
+
   async function onAdd(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
@@ -141,7 +166,7 @@ export default function ConsumersPage() {
                     <span className="pill">Not verified</span>
                   )}
                 </td>
-                <td className="right">
+                <td className="right actions">
                   <Link
                     className="button button--quiet"
                     href={
@@ -152,6 +177,13 @@ export default function ConsumersPage() {
                   >
                     {c.enrolled_at ? "View credit" : "Verify"}
                   </Link>
+                  <button
+                    type="button"
+                    className="button button--quiet button--danger"
+                    onClick={() => void onDelete(c)}
+                  >
+                    Remove
+                  </button>
                 </td>
               </tr>
             ))}

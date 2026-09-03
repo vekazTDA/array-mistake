@@ -260,6 +260,27 @@ a:hover {
   filter: none;
 }
 
+/*
+  Destructive action. Uses --error-* rather than a hardcoded red so it stays
+  correct in dark mode along with everything else that reads those tokens.
+*/
+.button--danger {
+  color: var(--error-ink);
+  border-color: var(--error-line);
+}
+
+.button--danger:hover:not(:disabled) {
+  background: var(--error-bg);
+  border-color: var(--error-line);
+  color: var(--error-ink);
+}
+
+.table td.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
 .tabs {
   display: flex;
   flex-wrap: wrap;

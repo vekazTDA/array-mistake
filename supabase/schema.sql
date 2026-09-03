@@ -110,6 +110,15 @@ create policy "consumers: update own"
   using (auth.uid() = owner_id)
   with check (auth.uid() = owner_id);
 
+-- Permanent delete. Plain RLS is enough here — unlike enrolment, there is no
+-- external-reference trust problem, just "is this your row". array_events
+-- rows survive via consumer_id -> null (see below), so deleting a client
+-- does not lose the audit trail used to reconcile Array's invoice — only the
+-- name attached to it.
+create policy "consumers: delete own"
+  on public.consumers for delete
+  using (auth.uid() = owner_id);
+
 -- Staff may relabel a consumer. array_user_id and enrolled_at are written only
 -- by the SECURITY DEFINER function below.
 revoke update on public.consumers from authenticated, anon;
