@@ -65,11 +65,22 @@ export type ArrayTagName = (typeof ArrayTag)[keyof typeof ArrayTag];
  *
  * TODO: confirm with Array which is intended. Set here once, not per-page.
  */
-export const VERIFICATION_BUREAUS = {
-  tui: "true",
-  exp: "false",
-  efx: "false",
-} as const;
+const BUREAUS_ALL = { tui: "true", exp: "true", efx: "true" } as const;
+const BUREAUS_TU_ONLY = { tui: "true", exp: "false", efx: "false" } as const;
+
+/**
+ * Set NEXT_PUBLIC_ARRAY_BUREAUS to "all" to enable all three, anything else
+ * (or unset) keeps TransUnion only.
+ *
+ * Env-driven because this is a live operational decision, not a code one:
+ * TU-only matches the contracted scope, but any consumer TransUnion cannot
+ * recognise fails outright with nothing to fall through to — including most
+ * of Array's sandbox identities, which require every bureau they list to be
+ * passed as a verification provider. Flipping this needs to be a one-minute
+ * change during a support call, not a deploy.
+ */
+export const VERIFICATION_BUREAUS =
+  process.env.NEXT_PUBLIC_ARRAY_BUREAUS === "all" ? BUREAUS_ALL : BUREAUS_TU_ONLY;
 
 /**
  * Array caps userToken lifetime at 60 minutes. The clock is idle-based —
