@@ -80,29 +80,52 @@ export default function ArrayComponent({ tag, attributes = {}, className }: Prop
       .then(() => {
         if (cancelled || !host.current) return;
 
-        if (!element.current) {
-          element.current = document.createElement(tag);
-          host.current.appendChild(element.current);
-        }
+        const desired: Record<string, string | undefined> = {
+          appKey: ARRAY_APP_KEY,
+          apiUrl: ARRAY_API_URL,
+          /**
+           * Set explicitly either way. Array's cutover instruction is to change
+           * this value from "true" to "false", not to drop the attribute —
+           * and while an absent boolean attribute should read as false here,
+           * "should" is the wrong standard for the flag that decides whether a
+           * pull hits real bureau data and real billing.
+           */
+          sandbox: ARRAY_SANDBOX ? "true" : "false",
+          ...attributes,
+        };
 
-        const el = element.current;
-        el.setAttribute("appKey", ARRAY_APP_KEY);
-        el.setAttribute("apiUrl", ARRAY_API_URL);
+        const isNew = !element.current;
+        const el = element.current ?? document.createElement(tag);
+
         /**
-         * Set explicitly either way. Array's cutover instruction is to change
-         * this value from "true" to "false", not to drop the attribute —
-         * and while an absent boolean attribute should read as false here,
-         * "should" is the wrong standard for the flag that decides whether a
-         * pull hits real bureau data and real billing.
+         * Only touch attributes whose value actually changed.
+         *
+         * A custom element's attributeChangedCallback fires on every
+         * setAttribute, even when the value is identical. Re-setting all of
+         * them on each update — appKey, apiUrl, sandbox, the bureau — made one
+         * token refresh trigger the component several times, and each trigger
+         * is a request to Array. The audit log showed report loads arriving in
+         * pairs and in fours within the same second.
+         *
+         * getAttribute and setAttribute both lowercase the name on an HTML
+         * element, so "appKey" compares correctly against "appkey".
          */
-        el.setAttribute("sandbox", ARRAY_SANDBOX ? "true" : "false");
-
-        for (const [name, value] of Object.entries(attributes)) {
+        for (const [name, value] of Object.entries(desired)) {
           if (value === undefined || value === "") {
-            el.removeAttribute(name);
-          } else {
+            if (el.hasAttribute(name)) el.removeAttribute(name);
+          } else if (el.getAttribute(name) !== value) {
             el.setAttribute(name, value);
           }
+        }
+
+        /**
+         * Append only once everything is set. Appending first meant the
+         * component connected with no appKey or token, then reacted to each
+         * attribute as it arrived — a series of starts instead of one.
+         */
+        if (isNew) {
+          element.current = el;
+          host.current.appendChild(el);
         }
 
         setStatus("ready");

@@ -23,7 +23,7 @@ export default function DashboardPage() {
   const params = useParams<{ id: string }>();
   const consumerId = params.id;
 
-  const { userToken, status, refresh } = useArrayToken(consumerId);
+  const { userToken, status, refresh, handleRejectedToken } = useArrayToken(consumerId);
   const [view, setView] = useState<View>("overview");
   const [name, setName] = useState<string | null>(null);
 
@@ -44,10 +44,12 @@ export default function DashboardPage() {
 
   useArrayEvents((detail) => {
     // "logout" fires both when a logout happens and when an underlying Array
-    // call returns 401/403 on an expired token. The event doesn't distinguish
-    // them, so try a silent refresh first.
+    // call returns 401/403. The event doesn't distinguish them, so try one
+    // silent re-mint — through the guarded path, never refresh() directly.
+    // Calling refresh() here on every event is what let a refused token loop:
+    // refused → new token → component reloads → refused → new token.
     if (detail.event === ArrayEvent.logout) {
-      void refresh();
+      void handleRejectedToken();
     }
 
     // Per-pull billing means it's worth keeping a local record of what was

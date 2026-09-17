@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { TOKEN_REFRESH_MARGIN_MS } from "@/lib/array";
 
 type TokenState = {
   userToken: string | null;
@@ -9,67 +8,129 @@ type TokenState = {
 };
 
 /**
+ * At most one automatic re-mint in this window.
+ *
+ * A second rejection this soon after a fresh token means the new token was
+ * refused too — retrying again would just repeat the refusal. Stop, and leave
+ * it to the "Try again" button.
+ */
+const AUTO_REFRESH_COOLDOWN_MS = 2 * 60 * 1000;
+
+/**
  * Holds the current Array userToken for one consumer.
  *
- * Tokens are minted server-side and expire after 60 idle minutes. Rather than
- * bouncing to a login screen when that happens, this refreshes silently — call
- * refresh() from a "logout" event handler.
+ * Minted once when the dashboard opens, and again only when Array reports the
+ * token is no longer usable. There is deliberately no timer: an earlier version
+ * refreshed on a schedule, and every new token swaps the component's userToken
+ * attribute, which makes Array's component fetch the report again. With the
+ * schedule landing on its 60-second floor, an open dashboard re-pulled the
+ * report every minute — a staff member who opened one report once showed up
+ * in Array's log as ten attempts.
  *
- * The token is deliberately kept in memory only. It is not written to
- * localStorage, sessionStorage, or a cookie readable by JavaScript. It is also
- * scoped to one consumer: switching consumer re-mints rather than reusing.
+ * Array's tokens expire after 60 idle minutes and reset on each interaction,
+ * so an active session never needs a proactive refresh. A genuinely expired
+ * token surfaces as a "logout" event, which calls handleRejectedToken().
+ *
+ * The token is kept in memory only — not localStorage, sessionStorage, or a
+ * cookie readable by JavaScript — and is scoped to one consumer.
  */
 export function useArrayToken(consumerId: string) {
   const [state, setState] = useState<TokenState>({ userToken: null, status: "loading" });
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const refresh = useCallback(async () => {
-    if (!consumerId) return null;
+  const activeConsumer = useRef<string | null>(null);
+  const inFlight = useRef<Promise<string | null> | null>(null);
+  const lastAutoRefreshAt = useRef(0);
 
-    try {
-      const res = await fetch("/api/array/token", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ consumerId }),
-      });
+  /**
+   * One request at a time. Several "logout" events can arrive together — one
+   * per rejected sub-request inside a component — and each would otherwise
+   * start its own mint.
+   */
+  const mint = useCallback((): Promise<string | null> => {
+    if (!consumerId) return Promise.resolve(null);
+    if (inFlight.current) return inFlight.current;
 
-      if (res.status === 404) {
-        setState({ userToken: null, status: "notfound" });
+    const forConsumer = consumerId;
+
+    const run = (async (): Promise<string | null> => {
+      try {
+        const res = await fetch("/api/array/token", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ consumerId: forConsumer }),
+        });
+
+        // Navigated to another consumer while this was in flight.
+        if (activeConsumer.current !== forConsumer) return null;
+
+        if (res.status === 404) {
+          setState({ userToken: null, status: "notfound" });
+          return null;
+        }
+        if (res.status === 409) {
+          setState({ userToken: null, status: "unenrolled" });
+          return null;
+        }
+        if (!res.ok) {
+          setState({ userToken: null, status: "error" });
+          return null;
+        }
+
+        const { userToken } = (await res.json()) as { userToken: string };
+        if (activeConsumer.current !== forConsumer) return null;
+
+        setState({ userToken, status: "ready" });
+        return userToken;
+      } catch {
+        if (activeConsumer.current === forConsumer) {
+          setState({ userToken: null, status: "error" });
+        }
         return null;
       }
-      if (res.status === 409) {
-        setState({ userToken: null, status: "unenrolled" });
-        return null;
-      }
-      if (!res.ok) {
-        setState({ userToken: null, status: "error" });
-        return null;
-      }
+    })();
 
-      const { userToken, ttlInMinutes } = await res.json();
-      setState({ userToken, status: "ready" });
+    inFlight.current = run;
+    void run.finally(() => {
+      if (inFlight.current === run) inFlight.current = null;
+    });
 
-      if (timer.current) clearTimeout(timer.current);
-      const ttlMs = Number(ttlInMinutes) * 60 * 1000;
-      timer.current = setTimeout(refresh, Math.max(ttlMs - TOKEN_REFRESH_MARGIN_MS, 60_000));
-
-      return userToken as string;
-    } catch {
-      setState({ userToken: null, status: "error" });
-      return null;
-    }
+    return run;
   }, [consumerId]);
 
+  /**
+   * For Array's "logout" event, which fires on a real logout and also whenever
+   * an Array call is refused with 401/403. Retries once, then stops.
+   *
+   * Trade-off: a straggler rejection of the *old* token that lands after the
+   * cooldown check can show the error screen although the new token is fine.
+   * That costs one click on "Try again". The alternative — retrying on every
+   * rejection — is what turned one refused token into a stream of pulls.
+   */
+  const handleRejectedToken = useCallback((): Promise<string | null> => {
+    if (inFlight.current) return inFlight.current;
+
+    const now = Date.now();
+    if (now - lastAutoRefreshAt.current < AUTO_REFRESH_COOLDOWN_MS) {
+      setState({ userToken: null, status: "error" });
+      return Promise.resolve(null);
+    }
+
+    lastAutoRefreshAt.current = now;
+    return mint();
+  }, [mint]);
+
   useEffect(() => {
-    // Reset when the consumer changes, so a stale token never renders under a
-    // different person's name while the new one is in flight.
-    setState({ userToken: null, status: "loading" });
-    void refresh();
+    // Reset only when the consumer actually changes. Re-running for the same
+    // consumer (React Strict Mode does this in development) reuses the request
+    // already in flight instead of starting a second one.
+    if (activeConsumer.current !== consumerId) {
+      activeConsumer.current = consumerId;
+      inFlight.current = null;
+      lastAutoRefreshAt.current = 0;
+      setState({ userToken: null, status: "loading" });
+    }
+    void mint();
+  }, [consumerId, mint]);
 
-    return () => {
-      if (timer.current) clearTimeout(timer.current);
-    };
-  }, [refresh]);
-
-  return { ...state, refresh };
+  return { ...state, refresh: mint, handleRejectedToken };
 }

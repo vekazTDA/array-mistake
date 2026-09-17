@@ -2,14 +2,34 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createHash } from "crypto";
 import { rateLimit } from "@/lib/rateLimit";
+import { TOKEN_TTL_MINUTES } from "@/lib/array";
 
 const MAX_BODY_BYTES = 2048;
 
 /**
- * A normal session refreshes once an hour, plus a few retries after a logout
- * event. Ten per ten minutes leaves generous headroom over that while still
- * catching a retry loop. Keyed per consumer, since staff legitimately switch
- * between several in one sitting.
+ * ARRAY_TOKEN_TTL_MINUTES, parsed defensively.
+ *
+ * Previously `Number(env ?? 60)`. `??` does not catch an empty string, so a
+ * blank value in Vercel became Number("") = 0 — sent to Array as the TTL, and
+ * handed to the browser, where it pinned the old refresh timer to its
+ * 60-second floor. Anything empty, non-numeric or not positive now falls back
+ * to Array's 60-minute cap, and larger values are clamped to it.
+ */
+function tokenTtlMinutes() {
+  const parsed = Number.parseInt(process.env.ARRAY_TOKEN_TTL_MINUTES ?? "", 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return TOKEN_TTL_MINUTES;
+  return Math.min(parsed, TOKEN_TTL_MINUTES);
+}
+
+/**
+ * A normal dashboard mints once when it opens, plus at most one retry after a
+ * rejected token. Ten per ten minutes leaves headroom for staff reopening the
+ * page. Keyed per consumer, since staff legitimately switch between several in
+ * one sitting.
+ *
+ * Not the real protection against loops: this limiter lives in memory per
+ * serverless instance, so on Vercel it does not reliably hold. The guard in
+ * useArrayToken is what stops a refused token from repeating.
  */
 const TOKEN_LIMIT = 10;
 const TOKEN_WINDOW_MS = 10 * 60 * 1000;
@@ -86,12 +106,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Not enrolled." }, { status: 409 });
   }
 
-  /**
-   * Sent as a number. It was previously forwarded straight from the
-   * environment as a string, which is a plausible cause of a 400 from Array
-   * and costs nothing to rule out.
-   */
-  const ttlInMinutes = Number(process.env.ARRAY_TOKEN_TTL_MINUTES ?? 60);
+  const ttlInMinutes = tokenTtlMinutes();
 
   /**
    * Array allowlists source IPs, and Vercel serverless has no static outbound

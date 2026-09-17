@@ -84,12 +84,7 @@ export const VERIFICATION_BUREAUS =
 
 /**
  * Array caps userToken lifetime at 60 minutes. The clock is idle-based —
- * each customer interaction with a component refreshes it.
+ * each customer interaction with a component refreshes it — which is why
+ * useArrayToken has no refresh timer.
  */
 export const TOKEN_TTL_MINUTES = 60;
-
-/**
- * Refresh a little before the token actually dies, so an in-flight component
- * call doesn't land on an expired token.
- */
-export const TOKEN_REFRESH_MARGIN_MS = 5 * 60 * 1000;
